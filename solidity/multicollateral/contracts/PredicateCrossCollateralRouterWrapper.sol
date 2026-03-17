@@ -39,9 +39,9 @@ import {CrossCollateralRouter} from "./CrossCollateralRouter.sol";
  *      1. User calls transferRemoteWithAttestation() or transferRemoteToWithAttestation()
  *      2. Wrapper validates attestation via PredicateClient, sets pendingAttestation = true
  *      3. Wrapper calls crossCollateralRouter.transferRemote() or transferRemoteTo()
- *      4. For cross-domain: CrossCollateralRouter dispatches message, mailbox calls postDispatch()
- *      5. For same-domain: CrossCollateralRouter calls handle() directly, no postDispatch
- *      6. postDispatch() verifies pendingAttestation == true (cross-domain only), then clears it
+ *      4. CrossCollateralRouter dispatches message through mailbox for ALL transfers (same-domain and cross-domain)
+ *      5. Mailbox calls postDispatch() which verifies pendingAttestation == true, then clears it
+ *      6. For same-domain: CrossCollateralRouter then synchronously calls handle() after dispatch
  *
  *      If someone bypasses wrapper and calls crossCollateralRouter directly, postDispatch()
  *      will revert because pendingAttestation will be false.
@@ -216,11 +216,8 @@ contract PredicateCrossCollateralRouterWrapper is
         // 4. Handle token transfer, pulling total quoted amount
         _handleTokenTransfer(quotes);
 
-        // 5. Set flag for cross-domain only (same-domain doesn't use postDispatch)
-        bool isCrossDomain = _destination != localDomain;
-        if (isCrossDomain) {
-            pendingAttestation = true;
-        }
+        // 5. Set flag for attestation verification (both same-domain and cross-domain)
+        pendingAttestation = true;
 
         // 6. Call cross-collateral router using already-encoded calldata
         // This reuses the same calldata that was validated in the attestation
@@ -234,9 +231,8 @@ contract PredicateCrossCollateralRouterWrapper is
             }
         }
 
-        // 7. For cross-domain: postDispatch should have consumed the authorization flag synchronously
-        //    For same-domain: no flag was set, no postDispatch
-        if (isCrossDomain && pendingAttestation) {
+        // 7. postDispatch should have consumed the authorization flag synchronously
+        if (pendingAttestation) {
             revert PredicateCrossCollateralRouterWrapper__PostDispatchNotExecuted();
         }
 
@@ -309,11 +305,8 @@ contract PredicateCrossCollateralRouterWrapper is
         // 4. Handle token transfer, pulling total quoted amount
         _handleTokenTransfer(quotes);
 
-        // 5. Set flag for cross-domain only (same-domain doesn't use postDispatch)
-        bool isCrossDomain = _destination != localDomain;
-        if (isCrossDomain) {
-            pendingAttestation = true;
-        }
+        // 5. Set flag for attestation verification (both same-domain and cross-domain)
+        pendingAttestation = true;
 
         // 6. Call cross-collateral router using already-encoded calldata
         // This reuses the same calldata that was validated in the attestation
@@ -327,9 +320,8 @@ contract PredicateCrossCollateralRouterWrapper is
             }
         }
 
-        // 7. For cross-domain: postDispatch should have consumed the authorization flag synchronously
-        //    For same-domain: no flag was set, no postDispatch
-        if (isCrossDomain && pendingAttestation) {
+        // 7. postDispatch should have consumed the authorization flag synchronously
+        if (pendingAttestation) {
             revert PredicateCrossCollateralRouterWrapper__PostDispatchNotExecuted();
         }
 

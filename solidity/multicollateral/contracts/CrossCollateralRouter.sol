@@ -40,6 +40,9 @@ import {ICrossCollateralFee} from "./interfaces/ICrossCollateralFee.sol";
  * Overrides:
  *  - handle(): accepts messages from the mailbox (cross-chain) or directly
  *    from enrolled routers on the same chain.
+ *  - transferRemoteTo(): dispatches all transfers (same-chain and cross-chain)
+ *    through mailbox for consistent hook execution, then synchronously calls
+ *    handle() for same-chain transfers.
  */
 contract CrossCollateralRouter is HypERC20Collateral, ICrossCollateralFee {
     using TypeCasts for address;
@@ -252,9 +255,9 @@ contract CrossCollateralRouter is HypERC20Collateral, ICrossCollateralFee {
         address _feeHook = feeHook();
         address _token = token();
 
-        // Same-domain transferRemoteTo calls handle() directly and does not dispatch
-        // through mailbox hooks, so do not charge hook fees in that path.
-        if (_feeHook != address(0) && _destination != localDomain) {
+        // Charge hook fees for both same-domain and cross-domain transfers
+        // since same-domain now also dispatches through mailbox hooks
+        if (_feeHook != address(0)) {
             uint256 hookFee = _quoteGasPaymentTo(
                 _destination,
                 _recipient,
@@ -323,11 +326,6 @@ contract CrossCollateralRouter is HypERC20Collateral, ICrossCollateralFee {
         bytes32 _targetRouter
     ) public payable returns (bytes32 messageId) {
         _requireAuthorizedRouter(_destination, _targetRouter);
-        if (_destination == localDomain) {
-            // Local transfers call handle() directly without mailbox dispatch,
-            // so any msg.value would be stuck in this contract permanently.
-            require(msg.value == 0, "CCR: local transfer no msg.value");
-        }
 
         (, uint256 remainingValue) = _calculateFeesAndChargeForRouter(
             _destination,
@@ -340,8 +338,18 @@ contract CrossCollateralRouter is HypERC20Collateral, ICrossCollateralFee {
         uint256 scaled = _outboundAmount(_amount);
         bytes memory tokenMsg = TokenMessage.format(_recipient, scaled);
 
+        // Both same-chain and cross-chain dispatch through mailbox (triggers hooks)
+        emit SentTransferRemote(_destination, _recipient, scaled);
+        messageId = mailbox.dispatch{value: remainingValue}(
+            _destination,
+            _targetRouter,
+            tokenMsg,
+            _generateHookMetadata(_destination, feeToken()),
+            IPostDispatchHook(address(hook))
+        );
+
+        // For same-chain: synchronously call handle() after dispatch
         if (_destination == localDomain) {
-            // Same-domain: call target router's handle directly
             address target = _targetRouter.bytes32ToAddress();
             require(target.code.length > 0, "CCR: target router not contract");
             CrossCollateralRouter(target).handle(
@@ -349,23 +357,14 @@ contract CrossCollateralRouter is HypERC20Collateral, ICrossCollateralFee {
                 TypeCasts.addressToBytes32(address(this)),
                 tokenMsg
             );
-        } else {
-            emit SentTransferRemote(_destination, _recipient, scaled);
-            messageId = mailbox.dispatch{value: remainingValue}(
-                _destination,
-                _targetRouter,
-                tokenMsg,
-                _generateHookMetadata(_destination, feeToken()),
-                IPostDispatchHook(address(hook))
-            );
         }
     }
 
     // ============ Quoting ============
 
     // Mirrors TokenRouter.quoteTransferRemote. Same 3-element quote structure.
-    // Differences: (1) router-aware fee lookup, (2) same-domain returns 0 gas
-    // since handle() is called directly without mailbox dispatch.
+    // Differences: (1) router-aware fee lookup, (2) same-domain now includes gas
+    // since dispatch is called for both same-chain and cross-chain transfers.
 
     /// @inheritdoc ICrossCollateralFee
     function quoteTransferRemoteTo(
@@ -384,18 +383,15 @@ contract CrossCollateralRouter is HypERC20Collateral, ICrossCollateralFee {
 
         quotes = new Quote[](3);
 
-        // Same-domain: handle() called directly, no interchain gas
-        uint256 gasQuote = 0;
+        // Both same-domain and cross-domain dispatch through mailbox, so quote gas fees
         address _feeToken = feeToken();
-        if (_destination != localDomain) {
-            gasQuote = _quoteGasPaymentTo(
-                _destination,
-                _recipient,
-                _outboundAmount(_amount),
-                _feeToken,
-                _targetRouter
-            );
-        }
+        uint256 gasQuote = _quoteGasPaymentTo(
+            _destination,
+            _recipient,
+            _outboundAmount(_amount),
+            _feeToken,
+            _targetRouter
+        );
         quotes[0] = Quote({token: _feeToken, amount: gasQuote});
 
         // Only difference from base: router-aware fee lookup
