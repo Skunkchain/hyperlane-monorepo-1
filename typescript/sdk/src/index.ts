@@ -955,6 +955,11 @@ export {
   TokenFeeConfigInputSchema,
   TokenFeeConfigInput,
   LinearFeeConfig,
+  OffchainQuotedLinearFeeConfig,
+  OffchainQuotedLinearFeeConfigSchema,
+  OffchainQuotedLinearFeeInputConfigSchema,
+  QuoteSignersSchema,
+  QuoteSignersConfig,
 } from './fee/types.js';
 export { convertToBps } from './fee/utils.js';
 
