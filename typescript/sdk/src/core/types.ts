@@ -41,6 +41,7 @@ export const DeployedCoreAddressesSchema = ProxyFactoryFactoriesSchema.extend({
   interchainAccountRouter: z.string(),
   merkleTreeHook: z.string().optional(),
   interchainGasPaymaster: z.string().optional(),
+  quotedCalls: z.string().optional(),
 });
 
 export type DeployedCoreAddresses = z.infer<typeof DeployedCoreAddressesSchema>;
