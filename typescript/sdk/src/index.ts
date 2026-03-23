@@ -78,6 +78,7 @@ export { ICoreAdapter } from './core/adapters/types.js';
 export {
   CoreAddresses,
   CoreFactories,
+  PERMIT2_ADDRESS,
   coreFactories,
 } from './core/contracts.js';
 export { HyperlaneLifecyleEvent } from './core/events.js';

@@ -24,6 +24,8 @@ export const CoreConfigSchema = OwnableSchema.extend({
   // did not have them and we want to maintain backward compatibility
   proxyAdmin: DeployedOwnableSchema.optional(),
   interchainAccountRouter: IcaRouterConfigSchema.optional(),
+  // Override canonical Permit2 address for QuotedCalls deployment
+  permit2: z.string().optional(),
 });
 
 export const DerivedCoreConfigSchema = CoreConfigSchema.merge(
@@ -41,6 +43,7 @@ export const DeployedCoreAddressesSchema = ProxyFactoryFactoriesSchema.extend({
   interchainAccountRouter: z.string(),
   merkleTreeHook: z.string().optional(),
   interchainGasPaymaster: z.string().optional(),
+  quotedCalls: z.string().optional(),
 });
 
 export type DeployedCoreAddresses = z.infer<typeof DeployedCoreAddressesSchema>;
