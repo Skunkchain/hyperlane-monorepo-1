@@ -1,3 +1,8 @@
+## [2.3.0] - 2026-03-24
+
+* feat(tron): migrate Tron agents from gRPC to HTTP API (#8370)
+* refactor(evm): remove evm tron techstack (#8408)
+
 ## [2.1.0] - 2026-03-04
 
 * feat(tron): add ethereum compatibility & tron aws signer (#8222)
